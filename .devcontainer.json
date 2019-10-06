@@ -1,0 +1,7 @@
+{
+    "dockerFile": "Dockerfile",
+    "extensions": [
+        "ms-vscode.go"
+    ],
+    "workspaceFolder": "/go/src/github.com/aureleoules/txcore"
+}

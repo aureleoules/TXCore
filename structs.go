@@ -4,10 +4,7 @@ package main
 // TX struct
 type TX struct {
 	Outputs []output // Public key of the output
-	Hash        string // UTXO ID
-	PublicKey   string // Public key of the input
-	Compressed  bool   // whether the PublicKey is compressed or not
-	TxIndex     int    // the utxo output index
+	Inputs []utxo
 
 	RawTX       []byte
 	SignedTX    []byte
@@ -17,4 +14,11 @@ type TX struct {
 type output struct {
 	Base58Address string
 	Amount int
+}
+
+type utxo struct {
+	TxID string
+	Index int
+	PublicKey string
+	Compressed bool
 }

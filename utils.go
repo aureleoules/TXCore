@@ -3,7 +3,6 @@ package main
 import (
 	"bytes"
 	"crypto/sha256"
-	"encoding/binary"
 	"encoding/hex"
 	"github.com/aureleoules/txcore/base58"
 	secp256k1 "github.com/toxeus/go-secp256k1"
@@ -97,8 +96,9 @@ func signRaw(tx *TX, privateKey string) ([]byte, bool) {
 	buffer.Write(buf.Bytes())
 
 	scriptSig := buffer.Bytes()
+	tx.ScriptSig = scriptSig
 
-	return buildRawTransaction(tx.Hash, 0, tx.Destination, tx.Amount, scriptSig), true
+	return tx.Build(), true
 }
 
 func generateNonce() [32]byte {
@@ -112,79 +112,6 @@ func generateNonce() [32]byte {
 func randInt(min int, max int) uint8 {
 	rand.Seed(time.Now().UTC().UnixNano())
 	return uint8(min + rand.Intn(max-min))
-}
-
-func buildRawTransaction(inputTransactionHash string, inputTransactionIndex int, publicKeyBase58Destination string, satoshis int, scriptSig []byte) []byte {
-
-	version, err := hex.DecodeString("01000000")
-	if err != nil {
-		log.Fatal(err)
-	}
-
-	inputs, err := hex.DecodeString("01")
-	if err != nil {
-		log.Fatal(err)
-	}
-
-	inputTransactionBytes, err := hex.DecodeString(inputTransactionHash)
-	if err != nil {
-		log.Fatal(err)
-	}
-
-	//Convert input transaction hash to little-endian form
-	inputTransactionBytesReversed := make([]byte, len(inputTransactionBytes))
-	for i := 0; i < len(inputTransactionBytes); i++ {
-		inputTransactionBytesReversed[i] = inputTransactionBytes[len(inputTransactionBytes)-i-1]
-	}
-
-	//Output index of input transaction
-	outputIndexBytes := make([]byte, 4)
-	binary.LittleEndian.PutUint32(outputIndexBytes, uint32(inputTransactionIndex))
-
-	//Script sig length
-	scriptSigLength := len(scriptSig)
-
-	//sequence_no. Normally 0xFFFFFFFF. Always in this case.
-	sequence, err := hex.DecodeString("ffffffff")
-	if err != nil {
-		log.Fatal(err)
-	}
-
-	//Numbers of outputs for the transaction being created. Always one in this example.
-	numOutputs, err := hex.DecodeString("01")
-	if err != nil {
-		log.Fatal(err)
-	}
-
-	//Satoshis to send.
-	satoshiBytes := make([]byte, 8)
-	binary.LittleEndian.PutUint64(satoshiBytes, uint64(satoshis))
-
-	//Script pub key
-	scriptPubKey := buildPublicKeyScript(publicKeyBase58Destination)
-	scriptPubKeyLength := len(scriptPubKey)
-
-	//Lock time field
-	lockTimeField, err := hex.DecodeString("00000000")
-	if err != nil {
-		log.Fatal(err)
-	}
-
-	var buffer bytes.Buffer
-	buffer.Write(version)
-	buffer.Write(inputs)
-	buffer.Write(inputTransactionBytesReversed)
-	buffer.Write(outputIndexBytes)
-	buffer.WriteByte(byte(scriptSigLength))
-	buffer.Write(scriptSig)
-	buffer.Write(sequence)
-	buffer.Write(numOutputs)
-	buffer.Write(satoshiBytes)
-	buffer.WriteByte(byte(scriptPubKeyLength))
-	buffer.Write(scriptPubKey)
-	buffer.Write(lockTimeField)
-
-	return buffer.Bytes()
 }
 
 func buildPublicKeyScript(publicKey string) []byte {

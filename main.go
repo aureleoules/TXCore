@@ -7,6 +7,9 @@ import (
 	"errors"
 	"encoding/binary"
 	"strconv"
+	"crypto/sha256"
+
+	secp256k1 "github.com/toxeus/go-secp256k1"
 )
 
 // Sign tx
@@ -21,12 +24,58 @@ func (tx *TX) Sign(privateKeys []string) error {
 	buf.Write(hashCodeType)
 	tx.RawTX = buf.Bytes()
 
-	/* Sign the transaction */
-	signedTX, ok := signRaw(tx, privateKeys[0])
+	secp256k1.Start()
+	decoded := decodeKey(privateKeys[0])
+
+	publicKeyBytes, ok := secp256k1.Pubkey_create(*byte32(decoded), tx.Compressed)
 	if !ok {
-		return errors.New("could not sign tx")
+		return errors.New("could not create public key")
 	}
 
+	shaHash := sha256.New()
+	shaHash.Write(tx.RawTX)
+	var hash []byte = shaHash.Sum(nil)
+
+	shaHash2 := sha256.New()
+	shaHash2.Write(hash)
+	rawTransactionHashed := shaHash2.Sum(nil)
+
+	nounce := generateNonce()
+
+	signedTransaction, ok := secp256k1.Sign(*byte32(rawTransactionHashed), *byte32(decoded), &nounce)
+	if !ok {
+		return errors.New("could not create sign")
+	}
+
+	ok = secp256k1.Verify(*byte32(rawTransactionHashed), signedTransaction, publicKeyBytes)
+	if !ok {
+		return errors.New("could not create verify")
+	}
+
+	secp256k1.Stop()
+
+	hashCodeTypeHex, err := hex.DecodeString("01")
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	signedTransactionLength := byte(len(signedTransaction) + 1)
+
+	var buf2 bytes.Buffer
+	buf2.Write(publicKeyBytes)
+	pubKeyLength := byte(len(buf2.Bytes()))
+
+	var buffer bytes.Buffer
+	buffer.WriteByte(signedTransactionLength)
+	buffer.Write(signedTransaction)
+	buffer.WriteByte(hashCodeTypeHex[0])
+	buffer.WriteByte(pubKeyLength)
+	buffer.Write(buf2.Bytes())
+
+	scriptSig := buffer.Bytes()
+
+	signedTX := tx.Build(scriptSig)
+	
 	/* Convert to hex */
 	signedTXHex := hex.EncodeToString(signedTX)
 
@@ -46,17 +95,19 @@ func (tx *TX) AddOutput(base58address string, amount int) error {
 }
 
 // AddInput to the tx
-func (tx *TX) AddInput(txHash string, publicKey string) error {
+func (tx *TX) AddInput(txHash string, publicKey string, utxoIndex int, compressed bool) error {
 	// TODO clean this bullshit
 	tx.Hash = txHash
 	tx.PublicKey = publicKey
+	tx.TxIndex = utxoIndex
+	tx.Compressed = compressed
 	return nil
 }
 
 // Build tx
-func (tx *TX) Build() []byte {
+func (tx *TX) Build(scriptSig []byte) []byte {
 
-	version, err := hex.DecodeString("01000000")
+	version, err := hex.DecodeString("02000000")
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -81,12 +132,8 @@ func (tx *TX) Build() []byte {
 	outputIndexBytes := make([]byte, 4)
 	binary.LittleEndian.PutUint32(outputIndexBytes, uint32(tx.TxIndex))
 
-	if tx.ScriptSig == nil {
-		tx.ScriptSig = buildPublicKeyScript(tx.PublicKey)
-	}
-
 	//Script sig length
-	scriptSigLength := len(tx.ScriptSig)
+	scriptSigLength := len(scriptSig)
 
 	//sequence_no. Normally 0xFFFFFFFF. Always in this case.
 	sequence, err := hex.DecodeString("ffffffff")
@@ -95,12 +142,10 @@ func (tx *TX) Build() []byte {
 	}
 
 	//Numbers of outputs for the transaction being created.
-	log.Println(strconv.Itoa(len(tx.Outputs)))
 	numOutputs, err := hex.DecodeString("0" + strconv.Itoa(len(tx.Outputs)))
 	if err != nil {
 		log.Fatal(err)
 	}
-
 	
 	
 	//Lock time field
@@ -108,18 +153,17 @@ func (tx *TX) Build() []byte {
 	if err != nil {
 		log.Fatal(err)
 	}
-
 	var buffer bytes.Buffer
 	buffer.Write(version)
 	buffer.Write(inputs)
 	buffer.Write(inputTransactionBytesReversed)
 	buffer.Write(outputIndexBytes)
 	buffer.WriteByte(byte(scriptSigLength))
-	buffer.Write(tx.ScriptSig)
+	buffer.Write(scriptSig)
 	buffer.Write(sequence)
 	buffer.Write(numOutputs)
+	
 	for _, output := range tx.Outputs {
-		log.Println(output)
 		//Satoshis to send.
 		satoshiBytes := make([]byte, 8)
 		binary.LittleEndian.PutUint64(satoshiBytes, uint64(output.Amount))
@@ -134,7 +178,9 @@ func (tx *TX) Build() []byte {
 	}
 	buffer.Write(lockTimeField)
 
-	return buffer.Bytes()
+	rawTX := buffer.Bytes()
+	tx.RawTX = rawTX
+	return rawTX
 }
 
 // NewTX return basic tx

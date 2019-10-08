@@ -2,10 +2,8 @@ package main
 
 import (
 	"bytes"
-	"crypto/sha256"
 	"encoding/hex"
 	"github.com/aureleoules/txcore/base58"
-	secp256k1 "github.com/toxeus/go-secp256k1"
 	"log"
 	"math"
 	"math/rand"
@@ -44,61 +42,6 @@ func decodeKey(value string) []byte {
 	buffer.Write(encoded)
 
 	return buffer.Bytes()[1:len(buffer.Bytes())]
-}
-
-func signRaw(tx *TX, privateKey string) ([]byte, bool) {
-	secp256k1.Start()
-	decoded := decodeKey(privateKey)
-
-	publicKeyBytes, ok := secp256k1.Pubkey_create(*byte32(decoded), tx.Compressed)
-	if !ok {
-		return nil, false
-	}
-
-	shaHash := sha256.New()
-	shaHash.Write(tx.RawTX)
-	var hash []byte = shaHash.Sum(nil)
-
-	shaHash2 := sha256.New()
-	shaHash2.Write(hash)
-	rawTransactionHashed := shaHash2.Sum(nil)
-
-	nounce := generateNonce()
-
-	signedTransaction, ok := secp256k1.Sign(*byte32(rawTransactionHashed), *byte32(decoded), &nounce)
-	if !ok {
-		return nil, false
-	}
-
-	ok = secp256k1.Verify(*byte32(rawTransactionHashed), signedTransaction, publicKeyBytes)
-	if !ok {
-		return nil, false
-	}
-
-	secp256k1.Stop()
-
-	hashCodeType, err := hex.DecodeString("01")
-	if err != nil {
-		log.Fatal(err)
-	}
-
-	signedTransactionLength := byte(len(signedTransaction) + 1)
-
-	var buf bytes.Buffer
-	buf.Write(publicKeyBytes)
-	pubKeyLength := byte(len(buf.Bytes()))
-
-	var buffer bytes.Buffer
-	buffer.WriteByte(signedTransactionLength)
-	buffer.Write(signedTransaction)
-	buffer.WriteByte(hashCodeType[0])
-	buffer.WriteByte(pubKeyLength)
-	buffer.Write(buf.Bytes())
-
-	scriptSig := buffer.Bytes()
-	tx.ScriptSig = scriptSig
-
-	return tx.Build(), true
 }
 
 func generateNonce() [32]byte {

@@ -9,8 +9,6 @@ type TX struct {
 	Compressed  bool   // whether the PublicKey is compressed or not
 	TxIndex     int    // the utxo output index
 
-	ScriptSig []byte
-
 	RawTX       []byte
 	SignedTX    []byte
 	SignedTXHex string

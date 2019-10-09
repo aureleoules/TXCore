@@ -5,8 +5,6 @@ import (
 	"bytes"
 	"encoding/hex"
 	"errors"
-	"encoding/binary"
-	"strconv"
 	"crypto/sha256"
 
 	secp256k1 "github.com/toxeus/go-secp256k1"
@@ -82,16 +80,17 @@ func (tx *TX) Sign(privateKeys []string) error {
 		buffer.Write(buf2.Bytes())
 	
 		scriptSig := buffer.Bytes()
+
+		log.Println(scriptSig)
 		scriptSignatures = append(scriptSignatures, scriptSig)
+		signedTX := buildRawTX(tx, scriptSignatures)
+	
+		/* Convert to hex */
+		signedTXHex := hex.EncodeToString(signedTX)
+	
+		tx.SignedTX = signedTX
+		tx.SignedTXHex = signedTXHex
 	}
-	log.Println(scriptSignatures)
-	signedTX := tx.Build(scriptSignatures)
-
-	/* Convert to hex */
-	signedTXHex := hex.EncodeToString(signedTX)
-
-	tx.SignedTX = signedTX
-	tx.SignedTXHex = signedTXHex
 
 
 	return nil
@@ -119,94 +118,8 @@ func (tx *TX) AddInput(txHash string, publicKey string, utxoIndex int, compresse
 }
 
 // Build tx
-func (tx *TX) Build(scriptSignatures [][]byte) []byte {
-
-	version, err := hex.DecodeString("02000000")
-	if err != nil {
-		log.Fatal(err)
-	}
-
-	inputs, err := hex.DecodeString("0" + strconv.Itoa(len(tx.Inputs)))
-	if err != nil {
-		log.Fatal(err)
-	}
-
-
-	//Numbers of outputs for the transaction being created.
-	numOutputs, err := hex.DecodeString("0" + strconv.Itoa(len(tx.Outputs)))
-	if err != nil {
-		log.Fatal(err)
-	}
-	
-	
-	//Lock time field
-	lockTimeField, err := hex.DecodeString("00000000")
-	if err != nil {
-		log.Fatal(err)
-	}
-	var buffer bytes.Buffer
-	buffer.Write(version)
-	buffer.Write(inputs)
-
-	for i, input := range tx.Inputs {
-		var scriptSig []byte
-		if len(scriptSignatures) == 0 {
-			log.Println("scriptSignatures = 0")
-			scriptSig = buildPublicKeyScript(input.PublicKey)
-		} else {
-			log.Println("using signature")
-			scriptSig = scriptSignatures[i]
-		}
-		
-		//Script sig length
-		scriptSigLength := len(scriptSig)
-
-		//sequence_no. Normally 0xFFFFFFFF. Always in this case.
-		sequence, err := hex.DecodeString("ffffffff")
-		if err != nil {
-			log.Fatal(err)
-		}
-		
-		inputTransactionBytes, err := hex.DecodeString(input.TxID)
-		if err != nil {
-			log.Fatal(err)
-		}
-
-		//Convert input transaction hash to little-endian form
-		inputTransactionBytesReversed := make([]byte, len(inputTransactionBytes))
-		for i := 0; i < len(inputTransactionBytes); i++ {
-			inputTransactionBytesReversed[i] = inputTransactionBytes[len(inputTransactionBytes)-i-1]
-		}
-
-		//Output index of input transaction
-		outputIndexBytes := make([]byte, 4)
-		binary.LittleEndian.PutUint32(outputIndexBytes, uint32(input.Index))
-
-		buffer.Write(inputTransactionBytesReversed)
-		buffer.Write(outputIndexBytes)
-		buffer.WriteByte(byte(scriptSigLength))
-		buffer.Write(scriptSig)
-		buffer.Write(sequence)
-	}
-
-	buffer.Write(numOutputs)
-	
-	for _, output := range tx.Outputs {
-		//Satoshis to send.
-		satoshiBytes := make([]byte, 8)
-		binary.LittleEndian.PutUint64(satoshiBytes, uint64(output.Amount))
-	
-		//Script pub key
-		scriptPubKey := buildPublicKeyScript(output.Base58Address)
-		scriptPubKeyLength := len(scriptPubKey)
-
-		buffer.Write(satoshiBytes)
-		buffer.WriteByte(byte(scriptPubKeyLength))
-		buffer.Write(scriptPubKey)
-	}
-	buffer.Write(lockTimeField)
-
-	rawTX := buffer.Bytes()
+func (tx *TX) Build() []byte {
+	rawTX := buildRawTX(tx, [][]byte{})
 	tx.RawTX = rawTX
 	return rawTX
 }
@@ -219,15 +132,16 @@ func NewTX() TX {
 func main() {
 	tx := NewTX()
 	
-	tx.AddInput("55ab09f3da7cefcc26707b3ad96c0de8556b2728bdcbbb138b6526056401c4b8", "n1T8ZF8iSqFo74naz7fPkyomMwnqJ531ab", 1, true)
-	tx.AddInput("e27d652815de932a2a754ed424290e66ba1803ef7490c5c05c392998efabe961", "mr4sLqkpMKeKYbVCD7cVoWaxrMRGuTG2CH", 1, true)
+	tx.AddInput("4a93938ed5ba3157fbf5d565482df19c9fdc9581cdf1508ce1110e1bccc5d82d", "mz8NhsSzRXKx66GZRqf2a62iMBN6PqxbwH", 0, true)
+	// tx.AddInput("e89dcfeafc949aaccb47eac98f0efc59e47d135ce15548cc10ba6c9ff1fb6d67", "mgWptdrUwFFoazVCkC85XGNviwmSkTpt63", 0, true)
 
+	total := 7232645
 
-	tx.AddOutput("mz8NhsSzRXKx66GZRqf2a62iMBN6PqxbwH", 17980053)
-	tx.AddOutput("n1T8ZF8iSqFo74naz7fPkyomMwnqJ531ab", 4000)
+	tx.AddOutput("mz8NhsSzRXKx66GZRqf2a62iMBN6PqxbwH", total - 6000)
+	tx.AddOutput("mqMt69dhDW3qgaaqhxM3UPEyfisdAgiJ7J", 5000)
 
-	tx.Build([][]byte{})
-	err := tx.Sign([]string{"cQ79a3bvtF5XCzEDR5Xah2Zgu3VQDx2fRGxfajbFLckwHmjmw5gG", "cNftisr1ZMdYfQQQkh3Qw23SnwTJQUvLQddfxpJLSosFUDUuEvGJ"})
+	tx.Build()
+	err := tx.Sign([]string{"cQcNmeNmiXysYJT2cGFxYqkh4a3TCniDa25SGvnJJvXmA8DtDJtF"})
 	if err != nil {
 		log.Fatalln(err)
 	}

@@ -1,9 +1,12 @@
-# TXCore
-<center>
-<img src="https://i.imgur.com/f2tekH1.png"/>
-<p>The missing lightweight Bitcoin TX builder written in Go</p>
-</center>  
-  
+<div align="center">
+    <br>
+    <a href="https://github.com/aureleoules/txcore"><img src="https://i.imgur.com/f2tekH1.png" alt="TXCore" width="250"></a>
+    <br>
+    <h1>TXCore</h1>
+    <p align="center">The missing lightweight Bitcoin TX builder written in Go</p>
+    <br>
+</div>
+    
 ## Usage
 
 ```go

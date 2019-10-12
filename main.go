@@ -81,7 +81,6 @@ func (tx *TX) Sign(privateKeys []string) error {
 
 		scriptSig := buffer.Bytes()
 
-		log.Println(scriptSig)
 		scriptSignatures = append(scriptSignatures, scriptSig)
 		signedTX := buildRawTX(tx, scriptSignatures)
 

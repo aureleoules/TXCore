@@ -109,7 +109,6 @@ func buildRawTX(tx *TX, scriptSigs [][]byte) []byte {
 	for i, input := range tx.Inputs {
 		var scriptSig []byte
 		if len(scriptSigs) == 0 {
-			log.Println("scriptSignatures = 0")
 			scriptSig = buildPublicKeyScript(input.PublicKey)
 		} else if i > len(scriptSigs)-1 {
 			scriptSig = scriptSigs[i-1]

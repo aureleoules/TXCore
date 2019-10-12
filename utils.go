@@ -1,15 +1,15 @@
-package main
+package txcore
 
 import (
 	"bytes"
+	"encoding/binary"
 	"encoding/hex"
 	"github.com/aureleoules/txcore/base58"
 	"log"
 	"math"
 	"math/rand"
-	"time"
-	"encoding/binary"
 	"strconv"
+	"time"
 	"unsafe"
 )
 
@@ -91,14 +91,12 @@ func buildRawTX(tx *TX, scriptSigs [][]byte) []byte {
 		log.Fatal(err)
 	}
 
-
 	//Numbers of outputs for the transaction being created.
 	numOutputs, err := hex.DecodeString("0" + strconv.Itoa(len(tx.Outputs)))
 	if err != nil {
 		log.Fatal(err)
 	}
-	
-	
+
 	//Lock time field
 	lockTimeField, err := hex.DecodeString("00000000")
 	if err != nil {
@@ -113,12 +111,12 @@ func buildRawTX(tx *TX, scriptSigs [][]byte) []byte {
 		if len(scriptSigs) == 0 {
 			log.Println("scriptSignatures = 0")
 			scriptSig = buildPublicKeyScript(input.PublicKey)
-		} else if i > len(scriptSigs) -1 {
+		} else if i > len(scriptSigs)-1 {
 			scriptSig = scriptSigs[i-1]
 		} else {
 			scriptSig = scriptSigs[i]
 		}
-		
+
 		//Script sig length
 		scriptSigLength := len(scriptSig)
 
@@ -127,7 +125,7 @@ func buildRawTX(tx *TX, scriptSigs [][]byte) []byte {
 		if err != nil {
 			log.Fatal(err)
 		}
-		
+
 		inputTransactionBytes, err := hex.DecodeString(input.TxID)
 		if err != nil {
 			log.Fatal(err)
@@ -151,12 +149,12 @@ func buildRawTX(tx *TX, scriptSigs [][]byte) []byte {
 	}
 
 	buffer.Write(numOutputs)
-	
+
 	for _, output := range tx.Outputs {
 		//Satoshis to send.
 		satoshiBytes := make([]byte, 8)
 		binary.LittleEndian.PutUint64(satoshiBytes, uint64(output.Amount))
-	
+
 		//Script pub key
 		scriptPubKey := buildPublicKeyScript(output.Base58Address)
 		scriptPubKeyLength := len(scriptPubKey)
